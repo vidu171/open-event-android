@@ -5,7 +5,7 @@
         <item
             android:id="@+id/nav_user_profile"
             android:icon="@drawable/ic_account_circle_grey_24dp"
-            android:title="@string/menu_sign_up"
+            android:title="@string/login"
             app:showAsAction="always" />
     </group>
 
@@ -23,6 +23,11 @@
             android:icon="@drawable/ic_feed_black_24dp"
             app:showAsAction="always"
             android:title="@string/menu_feed" />
+        <item
+            android:id="@+id/nav_twitter_feed"
+            android:icon="@drawable/ic_feed_black_24dp"
+            app:showAsAction="always"
+            android:title="@string/twitter_feed" />
         <item
             android:id="@+id/nav_tracks"
             android:checked="true"
@@ -57,6 +62,7 @@
             android:icon="@drawable/ic_location_on_black_24dp"
             app:showAsAction="always"
             android:title="@string/menu_locations" />
+
     </group>
 
     <group

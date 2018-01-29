@@ -1,11 +1,14 @@
 package org.fossasia.openevent.activities;
 
+import android.app.Dialog;
+import android.arch.lifecycle.ViewModelProviders;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.support.design.widget.Snackbar;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.graphics.drawable.DrawableCompat;
 import android.support.v7.app.ActionBar;
@@ -19,9 +22,12 @@ import android.util.DisplayMetrics;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.amulyakhare.textdrawable.TextDrawable;
 import com.squareup.otto.Subscribe;
 
 import org.fossasia.openevent.OpenEventApp;
@@ -29,20 +35,21 @@ import org.fossasia.openevent.R;
 import org.fossasia.openevent.adapters.SessionsListAdapter;
 import org.fossasia.openevent.data.Session;
 import org.fossasia.openevent.data.Track;
-import org.fossasia.openevent.dbutils.RealmDataRepository;
 import org.fossasia.openevent.events.BookmarkChangedEvent;
+import org.fossasia.openevent.listeners.BookmarkStatus;
+import org.fossasia.openevent.listeners.OnBookmarkSelectedListener;
 import org.fossasia.openevent.utils.ConstantStrings;
 import org.fossasia.openevent.utils.DateConverter;
-import org.fossasia.openevent.utils.DateService;
+import org.fossasia.openevent.utils.SnackbarUtil;
 import org.fossasia.openevent.utils.Utils;
 import org.fossasia.openevent.utils.Views;
+import org.fossasia.openevent.viewmodels.TrackSessionsActivityViewModel;
 import org.threeten.bp.ZonedDateTime;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import butterknife.BindView;
-import io.realm.RealmObjectChangeListener;
 import timber.log.Timber;
 
 
@@ -50,7 +57,7 @@ import timber.log.Timber;
  * User: MananWason
  * Date: 14-06-2015
  */
-public class TrackSessionsActivity extends BaseActivity implements SearchView.OnQueryTextListener {
+public class TrackSessionsActivity extends BaseActivity implements SearchView.OnQueryTextListener, OnBookmarkSelectedListener {
 
     final private String SEARCH = "org.fossasia.openevent.searchText";
 
@@ -66,10 +73,18 @@ public class TrackSessionsActivity extends BaseActivity implements SearchView.On
     private SearchView searchView;
     private Menu menu;
 
+    private Dialog upcomingDialogBox;
+    private ImageView trackImageIcon;
+    private TextView upcomingSessionText;
+    private TextView upcomingSessionTitle;
+    private View upcomingSessionDetails;
+    private TextDrawable.IBuilder drawableBuilder = TextDrawable.builder().round();
+
     private static final int trackWiseSessionList = 4;
     private int trackId;
 
-    private RealmDataRepository realmRepo = RealmDataRepository.getDefaultInstance();
+    private TrackSessionsActivityViewModel trackSessionsActivityViewModel;
+
     private Track track;
 
     private ActionBar actionBar;
@@ -89,6 +104,7 @@ public class TrackSessionsActivity extends BaseActivity implements SearchView.On
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().setBackgroundDrawable(null);
+        setUpcomingSessionsDialog();
 
         setSupportActionBar(toolbar);
         String track = getIntent().getStringExtra(ConstantStrings.TRACK);
@@ -99,9 +115,9 @@ public class TrackSessionsActivity extends BaseActivity implements SearchView.On
             if (!TextUtils.isEmpty(track))
                 actionBar.setTitle(track);
         }
-        if (savedInstanceState != null && savedInstanceState.getString(SEARCH) != null) {
-            searchText = savedInstanceState.getString(SEARCH);
-        }
+
+        trackSessionsActivityViewModel = ViewModelProviders.of(this).get(TrackSessionsActivityViewModel.class);
+        searchText = trackSessionsActivityViewModel.getSearchText();
 
         //setting the grid layout to cut-off white space in tablet view
         DisplayMetrics displayMetrics = this.getResources().getDisplayMetrics();
@@ -112,6 +128,7 @@ public class TrackSessionsActivity extends BaseActivity implements SearchView.On
         gridLayoutManager = new GridLayoutManager(this, spanCount);
         sessionsRecyclerView.setLayoutManager(gridLayoutManager);
         sessionsListAdapter = new SessionsListAdapter(this, sessions, trackWiseSessionList);
+        sessionsListAdapter.setOnBookmarkSelectedListener(this);
         sessionsRecyclerView.setAdapter(sessionsListAdapter);
         sessionsRecyclerView.scrollToPosition(SessionsListAdapter.listPosition);
         sessionsRecyclerView.setItemAnimator(new DefaultItemAnimator());
@@ -120,55 +137,87 @@ public class TrackSessionsActivity extends BaseActivity implements SearchView.On
 
         sessionsListAdapter.setTrackId(trackId);
 
-        loadData();
+        loadTracks();
 
         handleVisibility();
     }
 
-    private void loadData() {
-        track = realmRepo.getTrack(trackId);
-        track.removeAllChangeListeners();
-        track.addChangeListener((RealmObjectChangeListener<Track>) (track, objectChangeSet) -> {
-            int color = Color.parseColor(track.getColor());
-            fontColor = Color.parseColor(track.getFontColor());
-            setUiColor(color);
+    private void makeUiChanges() {
+        int color = Color.parseColor(track.getColor());
+        fontColor = Color.parseColor(track.getFontColor());
+        setUiColor(color);
 
-            actionBar.setTitle(track.getName());
-            toolbar.setTitleTextColor(fontColor);
+        actionBar.setTitle(track.getName());
+        toolbar.setTitleTextColor(fontColor);
 
-            //coloring status bar icons for marshmallow+ devices
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (sessionsRecyclerView != null) && (fontColor != Color.WHITE)) {
-                sessionsRecyclerView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-            }
+        //coloring status bar icons for marshmallow+ devices
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && (sessionsRecyclerView != null) && (fontColor != Color.WHITE)) {
+            sessionsRecyclerView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        }
+    }
 
+    private void loadTracks() {
+        trackSessionsActivityViewModel.getTrack(trackId).observe(this, track -> {
+            this.track = track;
+            makeUiChanges();
+            loadSessions();
+            setUpcomingSession();
+        });
+    }
+
+    private void loadSessions() {
+        trackSessionsActivityViewModel.getSessions(searchText).observe(this, filteredSessions -> {
             sessions.clear();
-            sessions.addAll(track.getSessions().sort("startsAt"));
-            sessionsListAdapter.setCopyOfSessions(track.getSessions().sort("startsAt"));
-            if (!Utils.isEmpty(searchText))
-                sessionsListAdapter.filter(searchText);
+            sessions.addAll(filteredSessions);
             sessionsListAdapter.notifyDataSetChanged();
 
-            //finding upcoming and ongoing sessions
-            int countUpcoming = 0;
-            int countOngoing = 0;
-            for (Session trackSession : sessions) {
-                flag = 0;
-                ZonedDateTime start = DateConverter.getDate(trackSession.getStartsAt());
-                ZonedDateTime end = DateConverter.getDate((trackSession.getEndsAt()));
-                ZonedDateTime current = ZonedDateTime.now();
-                if (DateService.isOngoingSession(start, end, current)) {
-                    ongoingPosition = countOngoing;
-                    break;
-                } else if (DateService.isUpcomingSession(start, end, current)) {
-                    upcomingPosition = countUpcoming;
-                    break;
-                } else flag += 1;
-                countUpcoming += 1;
-                countOngoing += 1;
-            }
-
             handleVisibility();
+
+            ongoingPosition = trackSessionsActivityViewModel.getOngoingPosition();
+            upcomingPosition = trackSessionsActivityViewModel.getUpcomingPosition();
+            flag = trackSessionsActivityViewModel.getFlag();
         });
+    }
+
+    public void setUpcomingSessionsDialog() {
+        upcomingDialogBox = new Dialog(this);
+        upcomingDialogBox.setContentView(R.layout.upcoming_dialogbox);
+        trackImageIcon = upcomingDialogBox.findViewById(R.id.track_image_drawable);
+        upcomingSessionText = upcomingDialogBox.findViewById(R.id.upcoming_session_textview);
+        upcomingSessionTitle = upcomingDialogBox.findViewById(R.id.upcoming_Session_title);
+        Button dialogButton = upcomingDialogBox.findViewById(R.id.upcoming_button);
+        upcomingSessionDetails = upcomingDialogBox.findViewById(R.id.upcoming_session_details);
+        dialogButton.setOnClickListener(view -> upcomingDialogBox.dismiss());
+    }
+
+    public void setUpcomingSession() {
+        String upcomingTitle = "";
+        String track = "";
+        String color = null;
+        ZonedDateTime current = ZonedDateTime.now();
+        for (Session session : sessions) {
+            ZonedDateTime start = DateConverter.getDate(session.getStartsAt());
+            if (start.isAfter(current)) {
+                upcomingTitle = session.getTitle();
+                track = session.getTrack().getName();
+                color = session.getTrack().getColor();
+                break;
+            }
+        }
+
+        if (!TextUtils.isEmpty(upcomingTitle)) {
+            int trackColor = Color.parseColor(color);
+            upcomingSessionTitle.setPadding(10, 60, 10, 10);
+            upcomingSessionTitle.setText(getResources().getString(R.string.upcoming_sess));
+            TextDrawable drawable = drawableBuilder.build(String.valueOf(track.charAt(0)), trackColor);
+            trackImageIcon.setImageDrawable(drawable);
+            trackImageIcon.setBackgroundColor(Color.TRANSPARENT);
+            upcomingSessionText.setText(upcomingTitle);
+        } else {
+            upcomingSessionTitle.setPadding(10, 60, 10, 10);
+            upcomingSessionTitle.setText(getResources().getString(R.string.no_upcoming_Sess));
+            upcomingSessionDetails.setVisibility(View.GONE);
+        }
     }
 
     private void handleVisibility() {
@@ -180,7 +229,6 @@ public class TrackSessionsActivity extends BaseActivity implements SearchView.On
             sessionsRecyclerView.setVisibility(View.GONE);
         }
     }
-
 
     private void setUiColor(int color) {
         toolbar.setBackgroundColor(color);
@@ -208,7 +256,8 @@ public class TrackSessionsActivity extends BaseActivity implements SearchView.On
     @Subscribe
     public void onBookmarksChanged(BookmarkChangedEvent bookmarkChangedEvent) {
         Timber.d("Bookmarks Changed");
-        loadData();
+        loadTracks();
+        loadSessions();
     }
 
     @Override
@@ -234,6 +283,7 @@ public class TrackSessionsActivity extends BaseActivity implements SearchView.On
     protected void onDestroy() {
         super.onDestroy();
         DrawableCompat.setTint(menu.findItem(R.id.action_search_tracks).getIcon(), Color.WHITE);
+        sessionsListAdapter.clearOnBookmarkSelectedListener();
     }
 
     @Override
@@ -255,13 +305,8 @@ public class TrackSessionsActivity extends BaseActivity implements SearchView.On
             case R.id.action_search_sessions:
                 return true;
             case R.id.upcoming_sessions:
-                if (ongoingPosition != 0)
-                    gridLayoutManager.scrollToPositionWithOffset(ongoingPosition, 0);
-                else if (upcomingPosition != 0)
-                    gridLayoutManager.scrollToPositionWithOffset(upcomingPosition, 0);
-                else if (flag > 0) {
-                    Toast.makeText(this, getString(R.string.no_upcoming_ongoing), Toast.LENGTH_SHORT).show();
-                }
+                upcomingDialogBox.show();
+                return true;
             default:
                 //Do nothing
         }
@@ -302,9 +347,16 @@ public class TrackSessionsActivity extends BaseActivity implements SearchView.On
     @Override
     public boolean onQueryTextChange(String query) {
         searchText = query;
-        sessionsListAdapter.filter(searchText);
+        loadSessions();
         Utils.displayNoResults(noResultSessionsView, sessionsRecyclerView, noSessionsView, sessionsListAdapter.getItemCount());
 
         return true;
+    }
+
+    @Override
+    public void showSnackbar(BookmarkStatus bookmarkStatus) {
+        Snackbar snackbar = Snackbar.make(sessionsRecyclerView, SnackbarUtil.getMessageResource(bookmarkStatus), Snackbar.LENGTH_LONG);
+        SnackbarUtil.setSnackbarAction(this, snackbar, bookmarkStatus)
+                .show();
     }
 }

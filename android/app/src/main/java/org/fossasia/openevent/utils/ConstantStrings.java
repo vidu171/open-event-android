@@ -72,6 +72,8 @@ public class ConstantStrings {
 
     public static final String SESSION_MAP_ID = "sessionMapId";
 
+    public static final String IMAGE_ZOOM_KEY = "imageZoom";
+
     //Sort order
 
     public static final String PREF_SORT_SCHEDULE = "schedule_sort_type";
@@ -82,7 +84,9 @@ public class ConstantStrings {
     
     public static final String FACEBOOK_PAGE_ID = "pageId";
 
-    public static final String FACEBOOK_PAGE_NAME = "pageName";
+    public static final String FACEBOOK_PAGE_NAME = "fbPageName";
+
+    public static final String TWITTER_PAGE_NAME = "twitterPageName";
 
     public static final String FACEBOOK_COMMENTS = "comments";
 

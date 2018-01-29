@@ -6,10 +6,14 @@ import android.arch.lifecycle.ViewModelProviders;
 import android.graphics.Paint;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
+import android.support.design.widget.CoordinatorLayout;
 import android.support.design.widget.FloatingActionButton;
+import android.support.design.widget.Snackbar;
 import android.support.design.widget.TabLayout;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.view.ViewPager;
+import android.support.v7.app.ActionBar;
+import android.support.v7.app.AppCompatActivity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
@@ -23,11 +27,18 @@ import org.fossasia.openevent.OpenEventApp;
 import org.fossasia.openevent.R;
 import org.fossasia.openevent.adapters.ScheduleViewPagerAdapter;
 import org.fossasia.openevent.data.Track;
+import org.fossasia.openevent.listeners.BookmarkStatus;
+import org.fossasia.openevent.listeners.OnBookmarkSelectedListener;
 import org.fossasia.openevent.utils.ConstantStrings;
+import org.fossasia.openevent.utils.DateConverter;
 import org.fossasia.openevent.utils.SharedPreferencesUtil;
+import org.fossasia.openevent.utils.SnackbarUtil;
 import org.fossasia.openevent.utils.SortOrder;
 import org.fossasia.openevent.utils.Utils;
 import org.fossasia.openevent.viewmodels.ScheduleFragmentViewModel;
+import org.threeten.bp.Instant;
+import org.threeten.bp.ZoneId;
+import org.threeten.bp.ZoneOffset;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,7 +51,7 @@ import io.reactivex.disposables.CompositeDisposable;
 /**
  * Created by Manan Wason on 16/06/16.
  */
-public class ScheduleFragment extends BaseFragment {
+public class ScheduleFragment extends BaseFragment implements OnBookmarkSelectedListener {
 
     @BindView(R.id.viewpager) ViewPager viewPager;
     @BindView(R.id.tabLayout) TabLayout scheduleTabLayout;
@@ -48,6 +59,8 @@ public class ScheduleFragment extends BaseFragment {
     @BindView(R.id.filter_text) TextView filtersText;
     @BindView(R.id.close_filter) ImageView closeFilterBarButton;
     @BindView(R.id.filter_bar) LinearLayout filterBar;
+    @BindView(R.id.coordinate_layout_schedule)
+    protected CoordinatorLayout coordinatorLayoutParent;
 
     private final CompositeDisposable compositeDisposable = new CompositeDisposable();
     private int sortType;
@@ -87,12 +100,24 @@ public class ScheduleFragment extends BaseFragment {
         return R.layout.fragment_schedule;
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        //showing timezone with offset.
+        ZoneId zoneId = DateConverter.getZoneId();
+        ZoneOffset zoneOffset = zoneId.getRules().getOffset(Instant.now());
+        setSubtitle("(GMT" + zoneOffset.toString() + ")");
+    }
+
     private void setupViewPager(final ViewPager viewPager) {
         adapter = new ScheduleViewPagerAdapter(getChildFragmentManager());
 
-        scheduleFragmentViewModel.getEventDateString().observe(this, datePair -> {
-            adapter.addFragment(new DayScheduleFragment(), datePair.first, datePair.second);
-            adapter.notifyDataSetChanged();
+        scheduleFragmentViewModel.getEventDateString().observe(this, dateStrings -> {
+            for (int i = 0; i < dateStrings.size(); i++) {
+                adapter.addFragment(new DayScheduleFragment(), dateStrings.get(i).getFormattedDate(), dateStrings.get(i).getDate());
+                ((DayScheduleFragment) adapter.getLast()).setOnBookmarkSelectedListener(this);
+                adapter.notifyDataSetChanged();
+            }
         });
 
         scheduleFragmentViewModel.getTracks().observe(this, tracksList -> {
@@ -164,8 +189,7 @@ public class ScheduleFragment extends BaseFragment {
                 AlertDialog dialog = dialogSort.show();
                 dialog.getButton(sortOrder == SortOrder.SORT_ORDER_ASCENDING ? AlertDialog.BUTTON_NEGATIVE : AlertDialog.BUTTON_POSITIVE)
                         .setTextColor(ContextCompat.getColor(getContext(), android.R.color.darker_gray));
-                dialog.getButton(sortOrder == SortOrder.SORT_ORDER_ASCENDING ? AlertDialog.BUTTON_POSITIVE : AlertDialog.BUTTON_NEGATIVE)
-                        .setPaintFlags(Paint.UNDERLINE_TEXT_FLAG);
+                dialog.getButton(sortOrder == SortOrder.SORT_ORDER_ASCENDING ? AlertDialog.BUTTON_POSITIVE : AlertDialog.BUTTON_NEGATIVE);
                 dialog.show();
                 break;
             default:
@@ -207,7 +231,7 @@ public class ScheduleFragment extends BaseFragment {
                     }
                     notifyUpdate(-1, selectedTracks);
                     if(count!=0) {
-                        filtersText.setText("Filters" + "(" + count +")" + ": " + tracksFiltered);
+                        filtersText.setText(getResources().getString(R.string.filters_text, count, tracksFiltered));
                         filterBar.setVisibility(View.VISIBLE);
                     } else {
                         filterBar.setVisibility(View.GONE);
@@ -229,10 +253,31 @@ public class ScheduleFragment extends BaseFragment {
     public void onDestroyView() {
         super.onDestroyView();
         OpenEventApp.getEventBus().unregister(this);
+<<<<<<< HEAD
         if(!compositeDisposable.isDisposed())
             compositeDisposable.dispose();
+=======
+        compositeDisposable.dispose();
+>>>>>>> 214412edbd8e581f4825530cd381513337123964
         if(viewPager != null && onPageChangeListener != null)
             viewPager.removeOnPageChangeListener(onPageChangeListener);
+        for (int i = 0; i < adapter.getCount(); i++)
+            ((DayScheduleFragment) adapter.getItem(i)).clearOnBookmarkSelectedListener();
+        //Resets the subtitle to blank so that it is not shown in other Fragments.
+        setSubtitle("");
+    }
+
+    @Override
+    public void showSnackbar(BookmarkStatus bookmarkStatus) {
+        Snackbar snackbar = Snackbar.make(coordinatorLayoutParent, SnackbarUtil.getMessageResource(bookmarkStatus), Snackbar.LENGTH_LONG);
+        SnackbarUtil.setSnackbarAction(getContext(), snackbar, bookmarkStatus)
+                .show();    }
+
+    private void setSubtitle(String subtitle) {
+        ActionBar supportActionBar = ((AppCompatActivity) getActivity()).getSupportActionBar();
+        if (supportActionBar != null) {
+            ((AppCompatActivity) getActivity()).getSupportActionBar().setSubtitle(subtitle);
+        }
     }
 }
 

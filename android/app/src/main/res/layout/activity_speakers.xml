@@ -17,7 +17,7 @@
         <android.support.design.widget.CollapsingToolbarLayout
             android:id="@+id/collapsing_toolbar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="@dimen/item_image_view_extra_large"
             android:fitsSystemWindows="true"
             app:contentScrim="?attr/colorPrimary"
             app:layout_scrollFlags="scroll|exitUntilCollapsed">
@@ -36,7 +36,7 @@
                 <ImageView
                     android:id="@+id/speaker_image"
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/item_image_view_extra_large"
+                    android:layout_height="match_parent"
                     android:contentDescription="@null"
                     android:fitsSystemWindows="true"
                     android:scaleType="centerCrop"
@@ -52,12 +52,14 @@
                     android:layout_height="@dimen/speaker_view_scrim_bottom"
                     android:layout_gravity="bottom"
                     android:background="@drawable/scrim_bottom" />
+
             </FrameLayout>
 
             <android.support.v7.widget.Toolbar
                 android:id="@+id/toolbar_speakers"
                 android:layout_width="match_parent"
                 android:layout_height="?attr/actionBarSize"
+                app:titleTextAppearance="@style/ToolbarTitle"
                 app:layout_collapseMode="pin" />
 
             <LinearLayout
@@ -90,7 +92,7 @@
                     android:paddingBottom="@dimen/padding_small"
                     android:textColor="@android:color/white"
                     android:textSize="@dimen/text_size_large"
-                    tools:text="Subtitle"/>
+                    tools:text="Subtitle" />
 
             </LinearLayout>
 
@@ -131,7 +133,6 @@
                         android:id="@+id/tv_speaker_bio_title"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="@dimen/layout_margin_medium"
                         android:layout_marginTop="@dimen/layout_margin_medium"
                         android:padding="@dimen/padding_medium"
                         android:text="@string/speakers_bio"
@@ -141,10 +142,7 @@
                         android:id="@+id/speaker_bio"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:paddingEnd="@dimen/padding_medium"
-                        android:paddingLeft="@dimen/padding_medium"
-                        android:paddingRight="@dimen/padding_medium"
-                        android:paddingStart="@dimen/padding_medium"
+                        android:padding="@dimen/padding_medium"
                         tools:text="Paresh Mayani, Technical Lead @ Android" />
 
                 </LinearLayout>
@@ -174,7 +172,7 @@
                         android:padding="@dimen/padding_medium"
                         android:text="@string/social_media"
                         android:textStyle="bold"
-                        android:visibility="gone"/>
+                        android:visibility="gone" />
 
                     <LinearLayout
                         android:id="@+id/layoutSocialMedia"
@@ -190,8 +188,8 @@
                             android:contentDescription="@string/facebook_icon"
                             android:padding="@dimen/padding_medium"
                             android:tag="@string/fb"
-                            app:srcCompat="@drawable/ic_facebook_24dp"
-                            android:visibility="gone"/>
+                            android:visibility="gone"
+                            app:srcCompat="@drawable/ic_facebook_24dp" />
 
                         <ImageView
                             android:id="@+id/imageView_linkedin"
@@ -202,8 +200,8 @@
                             android:contentDescription="@string/linkedin_icon"
                             android:padding="@dimen/padding_medium"
                             android:tag="@string/linkedin"
-                            app:srcCompat="@drawable/ic_linkedin_24dp"
-                            android:visibility="gone"/>
+                            android:visibility="gone"
+                            app:srcCompat="@drawable/ic_linkedin_24dp" />
 
                         <ImageView
                             android:id="@+id/imageView_twitter"
@@ -214,8 +212,8 @@
                             android:contentDescription="@string/twitter_icon"
                             android:padding="@dimen/padding_medium"
                             android:tag="@string/twitter"
-                            app:srcCompat="@drawable/ic_twitter_24dp"
-                            android:visibility="gone"/>
+                            android:visibility="gone"
+                            app:srcCompat="@drawable/ic_twitter_24dp" />
 
                         <ImageView
                             android:id="@+id/imageView_github"
@@ -226,8 +224,8 @@
                             android:contentDescription="@string/github_icon"
                             android:padding="@dimen/padding_medium"
                             android:tag="@string/github"
-                            app:srcCompat="@drawable/ic_github_24dp"
-                            android:visibility="gone"/>
+                            android:visibility="gone"
+                            app:srcCompat="@drawable/ic_github_24dp" />
 
                         <ImageView
                             android:id="@+id/imageView_web"
@@ -238,8 +236,8 @@
                             android:contentDescription="@string/web_icon"
                             android:padding="@dimen/padding_medium"
                             android:tag="@string/website"
-                            app:srcCompat="@drawable/ic_domain_black_24dp"
-                            android:visibility="gone"/>
+                            android:visibility="gone"
+                            app:srcCompat="@drawable/ic_domain_black_24dp" />
                     </LinearLayout>
 
                 </LinearLayout>
@@ -257,7 +255,7 @@
                 android:layout_marginTop="@dimen/layout_margin_medium"
                 android:padding="@dimen/padding_medium"
                 android:text="@string/sessions_title_card"
-                android:textStyle="bold"/>
+                android:textStyle="bold" />
 
             <RelativeLayout
                 android:layout_width="match_parent"

@@ -1,5 +1,6 @@
 package org.fossasia.openevent.activities;
 
+import android.arch.lifecycle.ViewModelProviders;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -10,6 +11,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.support.design.widget.AppBarLayout;
 import android.support.design.widget.CollapsingToolbarLayout;
+import android.support.design.widget.Snackbar;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.graphics.Palette;
 import android.support.v7.widget.DefaultItemAnimator;
@@ -36,20 +38,23 @@ import org.fossasia.openevent.adapters.SessionsListAdapter;
 import org.fossasia.openevent.api.Urls;
 import org.fossasia.openevent.data.Session;
 import org.fossasia.openevent.data.Speaker;
-import org.fossasia.openevent.dbutils.RealmDataRepository;
 import org.fossasia.openevent.events.ConnectionCheckEvent;
+import org.fossasia.openevent.listeners.BookmarkStatus;
+import org.fossasia.openevent.listeners.OnBookmarkSelectedListener;
+import org.fossasia.openevent.utils.SnackbarUtil;
 import org.fossasia.openevent.utils.StringUtils;
 import org.fossasia.openevent.utils.Utils;
 import org.fossasia.openevent.utils.Views;
+import org.fossasia.openevent.utils.ZoomableImageUtil;
+import org.fossasia.openevent.viewmodels.SpeakerDetailsViewModel;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import butterknife.BindView;
 import butterknife.OnClick;
-import io.realm.RealmChangeListener;
 
-public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout.OnOffsetChangedListener {
+public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout.OnOffsetChangedListener, OnBookmarkSelectedListener {
 
     private SessionsListAdapter sessionsListAdapter;
 
@@ -62,6 +67,8 @@ public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout
     private boolean isHideToolbarView = false;
 
     private static final int spearkerWiseSessionList = 2;
+
+    private SpeakerDetailsViewModel speakerDetailsViewModel;
 
     @BindView(R.id.toolbar_speakers) Toolbar toolbar;
     @BindView(R.id.txt_no_sessions) TextView noSessionsView;
@@ -90,19 +97,19 @@ public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout
         String url;
         switch (id) {
             case R.id.imageView_linkedin:
-                url = speaker.getLinkedin();
+                url = selectedSpeaker.getLinkedin();
                 break;
             case R.id.imageView_fb:
-                url = speaker.getFacebook();
+                url = selectedSpeaker.getFacebook();
                 break;
             case R.id.imageView_github:
-                url = speaker.getGithub();
+                url = selectedSpeaker.getGithub();
                 break;
             case R.id.imageView_twitter:
-                url = speaker.getTwitter();
+                url = selectedSpeaker.getTwitter();
                 break;
             case R.id.imageView_web:
-                url = speaker.getWebsite();
+                url = selectedSpeaker.getWebsite();
                 break;
             default:
                 return;
@@ -113,8 +120,6 @@ public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout
         }
     }
 
-    private RealmDataRepository realmRepo = RealmDataRepository.getDefaultInstance();
-    private Speaker speaker;
     private String speakerName;
 
 
@@ -129,6 +134,8 @@ public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout
 
         appBarLayout.addOnOffsetChangedListener(this);
 
+        speakerDetailsViewModel = ViewModelProviders.of(this).get(SpeakerDetailsViewModel.class);
+
         DisplayMetrics displayMetrics = this.getResources().getDisplayMetrics();
         float width = displayMetrics.widthPixels / displayMetrics.density;
         int spanCount = (int) (width / 250.00);
@@ -138,6 +145,7 @@ public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout
         sessionRecyclerView.setLayoutManager(gridLayoutManager);
 
         sessionsListAdapter = new SessionsListAdapter(this, sessions, spearkerWiseSessionList);
+        sessionsListAdapter.setOnBookmarkSelectedListener(this);
         sessionRecyclerView.setNestedScrollingEnabled(false);
         sessionRecyclerView.setAdapter(sessionsListAdapter);
         sessionRecyclerView.setItemAnimator(new DefaultItemAnimator());
@@ -288,18 +296,10 @@ public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout
 
         gridLayoutManager.setSpanCount(spanCount);
 
-        speaker = realmRepo.getSpeaker(speakerName);
-        speaker.addChangeListener((RealmChangeListener<Speaker>) speaker -> {
-            selectedSpeaker = speaker;
+        speakerDetailsViewModel.getSpeaker(speakerName).observe(this, speakerData -> {
+            selectedSpeaker = speakerData;
             loadSpeakerDetails();
         });
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        if(speaker != null)
-            speaker.removeAllChangeListeners();
     }
 
     @Override
@@ -311,11 +311,6 @@ public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout
     @Override
     protected int getLayoutResource() {
         return R.layout.activity_speakers;
-    }
-
-    @Override
-    public void onSaveInstanceState(Bundle bundle) {
-        super.onSaveInstanceState(bundle);
     }
 
     private static int getDarkColor(int color) {
@@ -337,7 +332,7 @@ public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout
                         getResources().getString(R.string.message_1),
                         getResources().getString(R.string.app_name),
                         getResources().getString(R.string.message_2)) +
-                        StringUtils.join(sessions, ", ") +
+                        StringUtils.buildSession(sessions) +
                         String.format("\n\n%s (%s)\n",
                                 getResources().getString(R.string.message_3),
                                 Urls.getAppLink()
@@ -399,4 +394,22 @@ public class SpeakerDetailsActivity extends BaseActivity implements AppBarLayout
         }
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        sessionsListAdapter.clearOnBookmarkSelectedListener();
+    }
+
+    @OnClick(R.id.speaker_image)
+    public void onZoom() {
+        String imageUri = Utils.parseImageUri(selectedSpeaker.getPhotoUrl());
+        ZoomableImageUtil.showZoomableImageDialogFragment(getSupportFragmentManager(), imageUri);
+    }
+
+    @Override
+    public void showSnackbar(BookmarkStatus bookmarkStatus) {
+        Snackbar snackbar = Snackbar.make(sessionRecyclerView, SnackbarUtil.getMessageResource(bookmarkStatus), Snackbar.LENGTH_LONG);
+        SnackbarUtil.setSnackbarAction(this, snackbar, bookmarkStatus)
+                .show();
+    }
 }
