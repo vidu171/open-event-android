@@ -1,5 +1,6 @@
 package org.fossasia.openevent.activities;
 
+import android.arch.lifecycle.ViewModelProviders;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -23,6 +24,7 @@ import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
+import android.text.Html;
 import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -42,28 +44,29 @@ import org.fossasia.openevent.data.Microlocation;
 import org.fossasia.openevent.data.Session;
 import org.fossasia.openevent.data.Speaker;
 import org.fossasia.openevent.data.Track;
-import org.fossasia.openevent.dbutils.RealmDataRepository;
+import org.fossasia.openevent.listeners.BookmarkStatus;
+import org.fossasia.openevent.listeners.OnBookmarkSelectedListener;
 import org.fossasia.openevent.utils.ConstantStrings;
 import org.fossasia.openevent.utils.DateConverter;
 import org.fossasia.openevent.utils.NotificationUtil;
 import org.fossasia.openevent.utils.SharedPreferencesUtil;
-import org.fossasia.openevent.utils.StringUtils;
+import org.fossasia.openevent.utils.SnackbarUtil;
 import org.fossasia.openevent.utils.Utils;
 import org.fossasia.openevent.utils.Views;
 import org.fossasia.openevent.utils.WidgetUpdater;
+import org.fossasia.openevent.viewmodels.SessionDetailActivityViewModel;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import butterknife.BindView;
-import io.realm.RealmChangeListener;
 import timber.log.Timber;
 
 /**
  * User: MananWason
  * Date: 08-07-2015
  */
-public class SessionDetailActivity extends BaseActivity implements AppBarLayout.OnOffsetChangedListener {
+public class SessionDetailActivity extends BaseActivity implements AppBarLayout.OnOffsetChangedListener, OnBookmarkSelectedListener {
     private static final String TAG = "Session Detail";
 
     private SessionSpeakerListAdapter adapter;
@@ -114,13 +117,13 @@ public class SessionDetailActivity extends BaseActivity implements AppBarLayout.
     @BindView(R.id.watch)
     protected ImageButton playButton;
 
-    private static final String BY_ID = "id";
-    private static final String BY_NAME = "name";
-
     private String trackName, title, location;
     private int trackColor, darkColor, fontColor;
     private int id;
     private List<Speaker> speakers = new ArrayList<>();
+
+    private Session sessionById;
+    private Session sessionByName;
 
     private boolean isHideToolbarView = false;
     private boolean hasTrack = true;
@@ -128,9 +131,7 @@ public class SessionDetailActivity extends BaseActivity implements AppBarLayout.
 
     private String loadedFlag;
 
-    private RealmDataRepository realmRepo = RealmDataRepository.getDefaultInstance();
-    private Session sessionById;
-    private Session sessionByName;
+    private SessionDetailActivityViewModel sessionDetailActivityViewModel;
 
     @Override
     public void onCreate(final Bundle savedInstanceState) {
@@ -150,6 +151,8 @@ public class SessionDetailActivity extends BaseActivity implements AppBarLayout.
 
         adapter = new SessionSpeakerListAdapter(speakers);
 
+        sessionDetailActivityViewModel = ViewModelProviders.of(this).get(SessionDetailActivityViewModel.class);
+
         fabSessionBookmark.setOnClickListener(view -> {
             if(session == null)
                 return;
@@ -157,25 +160,23 @@ public class SessionDetailActivity extends BaseActivity implements AppBarLayout.
             if(session.getIsBookmarked()) {
                 Timber.tag(TAG).d("Bookmark Removed");
 
-                realmRepo.setBookmark(session.getId(), false).subscribe();
+                sessionDetailActivityViewModel.setBookmark(session, false);
                 fabSessionBookmark.setImageResource(R.drawable.ic_bookmark_border_white_24dp);
 
-                Snackbar.make(speakersRecyclerView, R.string.removed_bookmark, Snackbar.LENGTH_SHORT).show();
+                showSnackbar(new BookmarkStatus(Color.parseColor(session.getTrack().getColor()), session.getId(), BookmarkStatus.Status.CODE_UNDO_REMOVED));
             } else {
                 Timber.tag(TAG).d("Bookmark Added");
 
-                realmRepo.setBookmark(session.getId(), true).subscribe();
+                sessionDetailActivityViewModel.setBookmark(session, true);
                 fabSessionBookmark.setImageResource(R.drawable.ic_bookmark_white_24dp);
 
                 NotificationUtil.createNotification(session, getApplicationContext()).subscribe(
-                        () -> Snackbar.make(speakersRecyclerView,
-                                R.string.added_bookmark,
-                                Snackbar.LENGTH_SHORT)
-                                .show(),
-                        throwable -> Snackbar.make(speakersRecyclerView,
-                                R.string.error_create_notification,
-                                Snackbar.LENGTH_LONG).show());
-
+                        () -> showSnackbar(new BookmarkStatus(Color.parseColor(session.getTrack().getColor()),
+                                session.getId(),
+                                BookmarkStatus.Status.CODE_UNDO_ADDED)),
+                        throwable -> showSnackbar(new BookmarkStatus(Color.parseColor(session.getTrack().getColor()),
+                                session.getId(),
+                                BookmarkStatus.Status.CODE_ERROR)));
             }
 
             WidgetUpdater.updateWidget(getApplicationContext());
@@ -357,16 +358,26 @@ public class SessionDetailActivity extends BaseActivity implements AppBarLayout.
                 return true;
 
             case R.id.action_share:
+                StringBuilder speakersNameBuilder  = new StringBuilder();
+                boolean firstSpeaker = true;
+                for (Speaker speaker : session.getSpeakers()) {
+                    if (!firstSpeaker) {
+                        speakersNameBuilder.append(", ");
+                    }
+                    speakersNameBuilder.append(speaker.getName());
+                    firstSpeaker = false;
+                }
+
                 String startTime = DateConverter.formatDateWithDefault(DateConverter.FORMAT_DATE_COMPLETE, session.getStartsAt());
                 String endTime = DateConverter.formatDateWithDefault(DateConverter.FORMAT_DATE_COMPLETE, session.getEndsAt());
-                String shareText = String.format("Session Track: %s \n" +
-                                "Title: %s \n" +
-                                "Start Time: %s \n" +
-                                "End Time: %s\n" +
-                                "Speakers: %s\n" +
-                                "Location: %s",
-                        trackName, title, startTime, endTime, StringUtils.join(speakers, ", "), location) +
-                        "\nDescription: " + Views.fromHtml(session.getLongAbstract());
+                String shareText = String.format(getResources().getString(R.string.session_track_details) + " %s \n" +
+                                getResources().getString(R.string.title_details) + " %s \n" +
+                                getResources().getString(R.string.start_time_details) + " %s \n" +
+                                getResources().getString(R.string.end_time_details) + " %s \n" +
+                                getResources().getString(R.string.speakers_details) + " %s \n" +
+                                getResources().getString(R.string.location_details) + " %s ",
+                        trackName, title, startTime, endTime, speakersNameBuilder.toString(), location) +
+                        "\n"+getResources().getString(R.string.description_details) + " " + Views.fromHtml(session.getShortAbstract());
 
                 Intent sendIntent = new Intent();
                 sendIntent.setAction(Intent.ACTION_SEND);
@@ -379,7 +390,7 @@ public class SessionDetailActivity extends BaseActivity implements AppBarLayout.
                 Intent intent = new Intent(Intent.ACTION_INSERT);
                 intent.setType("vnd.android.cursor.item/event");
                 intent.putExtra(CalendarContract.Events.TITLE, title);
-                intent.putExtra(CalendarContract.Events.DESCRIPTION, session.getShortAbstract());
+                intent.putExtra(CalendarContract.Events.DESCRIPTION, Html.fromHtml(session.getShortAbstract()).toString());
                 intent.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, DateConverter.formatDateWithDefault(DateConverter.FORMAT_24H, session.getStartsAt()));
                 intent.putExtra(CalendarContract.EXTRA_EVENT_END_TIME, DateConverter.formatDateWithDefault(DateConverter.FORMAT_24H, session.getEndsAt()));
                 startActivity(intent);
@@ -437,29 +448,20 @@ public class SessionDetailActivity extends BaseActivity implements AppBarLayout.
         title = getIntent().getStringExtra(ConstantStrings.SESSION);
         trackName = getIntent().getStringExtra(ConstantStrings.TRACK);
 
-        sessionById = realmRepo.getSession(id);
-        sessionById.addChangeListener((RealmChangeListener<Session>) loadedSession -> {
-            if (!loadedSession.isValid())
-                return;
-
-            if (loadedFlag == null || loadedFlag.equals(BY_ID)) {
-                loadedFlag = BY_ID;
-                SharedPreferencesUtil.putInt(ConstantStrings.SESSION_MAP_ID, id);
-                loadSession(loadedSession);
-            }
+        sessionDetailActivityViewModel.getSessionById(id, loadedFlag).observe(this, sessionData -> {
+            sessionById = sessionData;
+            loadedFlag = SessionDetailActivityViewModel.BY_ID;
+            SharedPreferencesUtil.putInt(ConstantStrings.SESSION_MAP_ID, id);
+            loadSession(sessionById);
         });
 
-        sessionByName = realmRepo.getSession(title);
-        sessionByName.addChangeListener((RealmChangeListener<Session>) loadedSession -> {
-            if (!loadedSession.isValid())
-                return;
-
-            if (loadedFlag == null || loadedFlag.equals(BY_NAME)) {
-                loadedFlag = BY_NAME;
-                SharedPreferencesUtil.putInt(ConstantStrings.SESSION_MAP_ID, -1);
-                loadSession(loadedSession);
-            }
+        sessionDetailActivityViewModel.getSessionByName(title, loadedFlag).observe(this, sessionData -> {
+            sessionByName = sessionData;
+            loadedFlag = SessionDetailActivityViewModel.BY_NAME;
+            SharedPreferencesUtil.putInt(ConstantStrings.SESSION_MAP_ID, -1);
+            loadSession(sessionByName);
         });
+
     }
 
     private void loadSession(Session session) {
@@ -478,10 +480,9 @@ public class SessionDetailActivity extends BaseActivity implements AppBarLayout.
     }
 
     @Override
-    protected void onStop() {
-        super.onStop();
-
-        if(sessionById != null) sessionById.removeAllChangeListeners();
-        if(sessionByName != null) sessionByName.removeAllChangeListeners();
+    public void showSnackbar(BookmarkStatus bookmarkStatus) {
+        Snackbar snackbar = Snackbar.make(speakersRecyclerView, SnackbarUtil.getMessageResource(bookmarkStatus), Snackbar.LENGTH_LONG);
+        SnackbarUtil.setSnackbarAction(this, snackbar, bookmarkStatus)
+                .show();
     }
 }

@@ -1,5 +1,6 @@
 package org.fossasia.openevent.fragments;
 
+import android.arch.lifecycle.ViewModelProviders;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.design.widget.Snackbar;
@@ -19,11 +20,11 @@ import org.fossasia.openevent.R;
 import org.fossasia.openevent.adapters.SponsorsListAdapter;
 import org.fossasia.openevent.api.DataDownloadManager;
 import org.fossasia.openevent.data.Sponsor;
-import org.fossasia.openevent.dbutils.RealmDataRepository;
 import org.fossasia.openevent.events.SponsorDownloadEvent;
 import org.fossasia.openevent.utils.NetworkUtils;
 import org.fossasia.openevent.utils.Utils;
 import org.fossasia.openevent.utils.Views;
+import org.fossasia.openevent.viewmodels.SponsorsFragmentViewModel;
 import org.fossasia.openevent.views.stickyheadersrecyclerview.StickyRecyclerHeadersDecoration;
 
 import java.lang.ref.WeakReference;
@@ -31,7 +32,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import butterknife.BindView;
-import io.realm.RealmResults;
 import timber.log.Timber;
 
 /**
@@ -41,6 +41,7 @@ public class SponsorsFragment extends BaseFragment {
 
     private List<Sponsor> sponsors = new ArrayList<>();
     private SponsorsListAdapter sponsorsListAdapter;
+    private RecyclerView.AdapterDataObserver adapterDataObserver;
 
     @BindView(R.id.txt_no_sponsors)
     TextView noSponsorsView;
@@ -48,9 +49,6 @@ public class SponsorsFragment extends BaseFragment {
     SwipeRefreshLayout swipeRefreshLayout;
     @BindView(R.id.list_sponsors)
     RecyclerView sponsorsRecyclerView;
-
-    private RealmDataRepository realmRepo = RealmDataRepository.getDefaultInstance();
-    private RealmResults<Sponsor> realmResults;
 
     @Nullable
     @Override
@@ -62,10 +60,11 @@ public class SponsorsFragment extends BaseFragment {
         Utils.registerIfUrlValid(swipeRefreshLayout, this, this::refresh);
         setUpRecyclerView();
 
-        realmResults = realmRepo.getSponsors();
-        realmResults.addChangeListener((sponsors, orderedCollectionChangeSet) -> {
-            this.sponsors.clear();
-            this.sponsors.addAll(sponsors);
+        //set up view model
+        SponsorsFragmentViewModel sponsorsFragmentViewModel = ViewModelProviders.of(this).get(SponsorsFragmentViewModel.class);
+        sponsorsFragmentViewModel.getSponsors().observe(this, sponsorsList -> {
+            sponsors.clear();
+            sponsors.addAll(sponsorsList);
 
             sponsorsListAdapter.notifyDataSetChanged();
             handleVisibility();
@@ -84,12 +83,13 @@ public class SponsorsFragment extends BaseFragment {
 
         final StickyRecyclerHeadersDecoration headersDecoration = new StickyRecyclerHeadersDecoration(sponsorsListAdapter);
         sponsorsRecyclerView.addItemDecoration(headersDecoration);
-        sponsorsListAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+        adapterDataObserver = new RecyclerView.AdapterDataObserver() {
             @Override
             public void onChanged() {
                 headersDecoration.invalidateHeaders();
             }
-        });
+        };
+        sponsorsListAdapter.registerAdapterDataObserver(adapterDataObserver);
     }
 
     private void handleVisibility() {
@@ -111,9 +111,8 @@ public class SponsorsFragment extends BaseFragment {
     public void onDestroyView() {
         super.onDestroyView();
         Utils.unregisterIfUrlValid(this);
+        sponsorsListAdapter.unregisterAdapterDataObserver(adapterDataObserver);
 
-        // Remove listeners to fix memory leak
-        realmResults.removeAllChangeListeners();
         if(swipeRefreshLayout != null) swipeRefreshLayout.setOnRefreshListener(null);
     }
 

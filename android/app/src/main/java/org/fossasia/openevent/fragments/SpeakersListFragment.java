@@ -11,9 +11,9 @@ import android.support.design.widget.Snackbar;
 import android.support.v4.graphics.drawable.DrawableCompat;
 import android.support.v4.view.MenuItemCompat;
 import android.support.v4.widget.SwipeRefreshLayout;
-import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.SearchView;
+import android.support.v7.widget.StaggeredGridLayoutManager;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
@@ -38,7 +38,6 @@ import org.fossasia.openevent.utils.SharedPreferencesUtil;
 import org.fossasia.openevent.utils.Utils;
 import org.fossasia.openevent.utils.Views;
 import org.fossasia.openevent.viewmodels.SpeakersListFragmentViewModel;
-import org.fossasia.openevent.views.stickyheadersrecyclerview.StickyRecyclerHeadersDecoration;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -60,7 +59,7 @@ public class SpeakersListFragment extends BaseFragment implements SearchView.OnQ
     private List<Speaker> speakers = new ArrayList<>();
     private SpeakersListAdapter speakersListAdapter;
 
-    private GridLayoutManager gridLayoutManager;
+    private StaggeredGridLayoutManager staggeredGridLayoutManager;
 
     private String searchText = "";
     private SearchView searchView;
@@ -96,31 +95,20 @@ public class SpeakersListFragment extends BaseFragment implements SearchView.OnQ
         DisplayMetrics displayMetrics = getContext().getResources().getDisplayMetrics();
         float width = displayMetrics.widthPixels / displayMetrics.density;
         final int spanCount = (int) (width / 150.00);
-        gridLayoutManager = new GridLayoutManager(getActivity(), spanCount);
+        staggeredGridLayoutManager = new StaggeredGridLayoutManager(spanCount, StaggeredGridLayoutManager.VERTICAL);
 
-        speakersListAdapter = new SpeakersListAdapter(speakers, getActivity());
+        speakersListAdapter = new SpeakersListAdapter(speakers);
 
         speakersRecyclerView.setHasFixedSize(true);
         speakersRecyclerView.setAdapter(speakersListAdapter);
-        speakersRecyclerView.setLayoutManager(gridLayoutManager);
-        final StickyRecyclerHeadersDecoration headersDecoration = new StickyRecyclerHeadersDecoration(speakersListAdapter);
-        speakersRecyclerView.addItemDecoration(headersDecoration);
-        speakersListAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
-            @Override
-            public void onChanged() {
-                headersDecoration.invalidateHeaders();
-            }
-        });
+        speakersRecyclerView.setLayoutManager(staggeredGridLayoutManager);
     }
 
     private void loadData() {
-        speakersListFragmentViewModel.getSpeakers(sortType).observe(this,speakersList ->{
+        speakersListFragmentViewModel.getSpeakers(sortType, searchText).observe(this,speakersList ->{
             speakers.clear();
             speakers.addAll(speakersList);
-            speakersListAdapter.setCopyOfSpeakers(speakersList);
             speakersListAdapter.notifyDataSetChanged();
-            if (!Utils.isEmpty(searchText))
-                speakersListAdapter.filter(searchText);
             handleVisibility();
         });
     }
@@ -206,7 +194,7 @@ public class SpeakersListFragment extends BaseFragment implements SearchView.OnQ
         DisplayMetrics displayMetrics = getContext().getResources().getDisplayMetrics();
         float width = displayMetrics.widthPixels / displayMetrics.density;
         int spanCount = (int) (width / 150.00);
-        gridLayoutManager.setSpanCount(spanCount);
+        staggeredGridLayoutManager.setSpanCount(spanCount);
     }
 
     @Subscribe
@@ -249,7 +237,8 @@ public class SpeakersListFragment extends BaseFragment implements SearchView.OnQ
     @Override
     public boolean onQueryTextChange(String query) {
         searchText = query;
-        speakersListAdapter.filter(query);
+        loadData();
+        speakersListAdapter.animateTo(speakers);
         Utils.displayNoResults(noSpeakersResultView, speakersRecyclerView, noSpeakersView, speakersListAdapter.getItemCount());
 
         return true;

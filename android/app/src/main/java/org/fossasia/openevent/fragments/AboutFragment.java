@@ -1,6 +1,8 @@
 package org.fossasia.openevent.fragments;
 
 import android.annotation.TargetApi;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentTransaction;
 import android.arch.lifecycle.ViewModelProviders;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -8,6 +10,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
+import android.support.design.widget.CoordinatorLayout;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.DividerItemDecoration;
@@ -33,6 +36,7 @@ import com.squareup.otto.Subscribe;
 
 import org.fossasia.openevent.OpenEventApp;
 import org.fossasia.openevent.R;
+import org.fossasia.openevent.listeners.BookmarkStatus;
 import org.fossasia.openevent.activities.MainActivity;
 import org.fossasia.openevent.activities.SearchActivity;
 import org.fossasia.openevent.adapters.GlobalSearchAdapter;
@@ -43,7 +47,10 @@ import org.fossasia.openevent.data.extras.SocialLink;
 import org.fossasia.openevent.data.extras.SpeakersCall;
 import org.fossasia.openevent.events.BookmarkChangedEvent;
 import org.fossasia.openevent.events.EventLoadedEvent;
+import org.fossasia.openevent.utils.ConstantStrings;
+import org.fossasia.openevent.listeners.OnBookmarkSelectedListener;
 import org.fossasia.openevent.utils.DateConverter;
+import org.fossasia.openevent.utils.SnackbarUtil;
 import org.fossasia.openevent.utils.Utils;
 import org.fossasia.openevent.utils.Views;
 import org.fossasia.openevent.viewmodels.AboutFragmentViewModel;
@@ -58,7 +65,7 @@ import timber.log.Timber;
  * Created by harshita30 on 9/3/17.
  */
 
-public class AboutFragment extends BaseFragment {
+public class AboutFragment extends BaseFragment implements OnBookmarkSelectedListener {
 
     @BindView(R.id.welcomeMessage)
     protected TextView welcomeMessage;
@@ -86,6 +93,12 @@ public class AboutFragment extends BaseFragment {
     protected TextView eventDetailsHeader;
     @BindView(R.id.slidin_down_part)
     protected LinearLayout slidinDownPart;
+    @BindView(R.id.ll_event_date)
+    protected LinearLayout eventDate;
+    @BindView(R.id.ll_event_loc)
+    protected LinearLayout eventLoc;
+    @BindView(R.id.coordinate_layout_about)
+    protected CoordinatorLayout coordinatorLayoutParent;
 
 
     private ArrayList<String> dateList = new ArrayList<>();
@@ -95,8 +108,15 @@ public class AboutFragment extends BaseFragment {
 
     private List<Object> sessions = new ArrayList<>();
     private List<SocialLink> socialLinks = new ArrayList<>();
+    private static final String MAP_FRAGMENT_TAG = "mapFragment";
 
     private Event event;
+    private static OnMapSelectedListener mapFragmentCallback;
+
+    public interface OnMapSelectedListener {
+        public void onMapSelected(boolean value);
+    }
+
     private AboutFragmentViewModel aboutFragmentViewModel;
 
     @Override
@@ -106,6 +126,31 @@ public class AboutFragment extends BaseFragment {
 
         setUpBookmarksRecyclerView();
         setUpSocialLinksRecyclerView();
+
+        eventLoc.setOnClickListener(v -> {
+            if (event.isValid()) {
+                Bundle bundle = new Bundle();
+                bundle.putBoolean(ConstantStrings.IS_MAP_FRAGMENT_FROM_MAIN_ACTIVITY, true);
+                bundle.putString(ConstantStrings.LOCATION_NAME, event.getLocationName());
+
+                FragmentTransaction fragmentTransaction = getFragmentManager().beginTransaction();
+                Context context = getActivity();
+                Fragment mapFragment = ((OpenEventApp) context.getApplicationContext())
+                        .getMapModuleFactory()
+                        .provideMapModule()
+                        .provideMapFragment();
+                mapFragment.setArguments(bundle);
+                fragmentTransaction.replace(R.id.content_frame, mapFragment, MAP_FRAGMENT_TAG).commit();
+                ((MainActivity) getActivity()).getSupportActionBar().setTitle(event.getLocationName());
+                if (mapFragmentCallback != null)
+                    mapFragmentCallback.onMapSelected(true);
+            }
+        });
+
+        eventDate.setOnClickListener(v -> {
+            if (event.isValid())
+                startActivity(Utils.eventCalendar(event));
+        });
 
         aboutFragmentViewModel = ViewModelProviders.of(this).get(AboutFragmentViewModel.class);
 
@@ -126,6 +171,12 @@ public class AboutFragment extends BaseFragment {
         });
     }
 
+    public static AboutFragment newInstance(OnMapSelectedListener onMapSelectedListener) {
+        AboutFragment fragment = new AboutFragment();
+        mapFragmentCallback = onMapSelectedListener;
+        return fragment;
+    }
+
     @Subscribe
     public void onEventLoaded(EventLoadedEvent eventLoadedEvent) {
         loadEvent(eventLoadedEvent.getEvent());
@@ -134,6 +185,7 @@ public class AboutFragment extends BaseFragment {
     private void setUpBookmarksRecyclerView() {
         bookmarksRecyclerView.setVisibility(View.VISIBLE);
         bookMarksListAdapter = new GlobalSearchAdapter(sessions, getContext());
+        bookMarksListAdapter.setOnBookmarkSelectedListener(this);
         bookmarksRecyclerView.setAdapter(bookMarksListAdapter);
         bookmarksRecyclerView.addItemDecoration(new DividerItemDecoration(getContext(), DividerItemDecoration.VERTICAL));
         bookmarksRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
@@ -191,11 +243,11 @@ public class AboutFragment extends BaseFragment {
     @TargetApi(16)
     void collapseExpandTextView() {
         //translation animation of event bar
-        TranslateAnimation eventBarDownDirection  = new TranslateAnimation(0, 0, -eventDescription.getHeight(), 0);
+        TranslateAnimation eventBarDownDirection = new TranslateAnimation(0, 0, -eventDescription.getHeight(), 0);
         eventBarDownDirection.setInterpolator(new LinearInterpolator());
         eventBarDownDirection.setDuration(300);
 
-        TranslateAnimation eventBarUpDirection  = new TranslateAnimation(0, 0, eventDescription.getHeight(), 0);
+        TranslateAnimation eventBarUpDirection = new TranslateAnimation(0, 0, eventDescription.getHeight(), 0);
         eventBarUpDirection.setInterpolator(new LinearInterpolator());
         eventBarUpDirection.setDuration(300);
 
@@ -229,7 +281,7 @@ public class AboutFragment extends BaseFragment {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
 
-        switch (item.getItemId()){
+        switch (item.getItemId()) {
             case R.id.action_search_home:
                 startActivity(new Intent(getContext(), SearchActivity.class));
                 break;
@@ -247,7 +299,7 @@ public class AboutFragment extends BaseFragment {
                 displaySpeakersCallInformation();
                 break;
             case R.id.action_download_latest_data:
-                ((MainActivity)getActivity()).downloadData();
+                ((MainActivity) getActivity()).downloadData();
                 break;
             default:
                 //No option selected. Do Nothing..
@@ -261,12 +313,12 @@ public class AboutFragment extends BaseFragment {
         LayoutInflater inflater = this.getLayoutInflater();
         View dialogView = inflater.inflate(R.layout.copyright_dialog, null);
         dialogBuilder.setView(dialogView).setPositiveButton("Back", (dialog, which) -> dialog.cancel());
-        TextView holder = (TextView) dialogView.findViewById(R.id.holder_textview);
-        TextView licence = (TextView) dialogView.findViewById(R.id.licence);
-        TextView licenceurl = (TextView) dialogView.findViewById(R.id.licence_url);
+        TextView holder = dialogView.findViewById(R.id.holder_textview);
+        TextView licence = dialogView.findViewById(R.id.licence);
+        TextView licenceurl = dialogView.findViewById(R.id.licence_url);
         if (event.isValid() && event.getEventCopyright().isValid()) {
             Copyright copyright = event.getEventCopyright();
-            licence.setText(copyright.getLicence() + " " + String.valueOf(copyright.getYear()));
+            licence.setText(getResources().getString(R.string.space_separated_strings, copyright.getLicence(), String.valueOf(copyright.getYear())));
             holder.setText(copyright.getHolder());
             String linkedurl = String.format("<a href=\"%s\">" + copyright.getLicenceUrl() + "</a> ", copyright.getLicenceUrl());
             licenceurl.setText(Html.fromHtml(linkedurl));
@@ -279,22 +331,22 @@ public class AboutFragment extends BaseFragment {
     }
 
     private void displaySpeakersCallInformation() {
-        AlertDialog.Builder dialogBuilder  = new AlertDialog.Builder(getContext());
+        AlertDialog.Builder dialogBuilder = new AlertDialog.Builder(getContext());
         LayoutInflater inflater = this.getLayoutInflater();
         View dialogView = inflater.inflate(R.layout.speakers_call_dialog, null);
-        TextView holder = (TextView) dialogView.findViewById(R.id.holder_textview);
-        TextView announcement = (TextView) dialogView.findViewById(R.id.announcement);
-        TextView fromDateOfEvent = (TextView) dialogView.findViewById(R.id.from_date_textview);
-        TextView toDateOfEvent = (TextView) dialogView.findViewById(R.id.to_date_textview);
+        TextView holder = dialogView.findViewById(R.id.holder_textview);
+        TextView announcement = dialogView.findViewById(R.id.announcement);
+        TextView fromDateOfEvent = dialogView.findViewById(R.id.from_date_textview);
+        TextView toDateOfEvent = dialogView.findViewById(R.id.to_date_textview);
 
         if (event.isValid() && event.getSpeakersCall().isValid()) {
             SpeakersCall speakersCall = event.getSpeakersCall();
             holder.setText(event.getEventCopyright().getHolder());
             String announcementString = Html.fromHtml(speakersCall.getAnnouncement()).toString();
-            announcement.setText(announcementString + "at " + event.getEmail());
+            announcement.setText(getResources().getString(R.string.about_fragment_announcement, announcementString, event.getEmail()));
             int index = speakersCall.getStartsAt().indexOf("T");
-            toDateOfEvent.setText("To: " + speakersCall.getStartsAt().substring(0, index));
-            fromDateOfEvent.setText("From: " + speakersCall.getEndsAt().substring(0, index));
+            toDateOfEvent.setText(getResources().getString(R.string.about_fragment_to_date_event, speakersCall.getStartsAt().substring(0, index)));
+            fromDateOfEvent.setText(getResources().getString(R.string.about_fragment_from_date_event, speakersCall.getEndsAt().substring(0, index)));
             dialogBuilder.setView(dialogView).setNegativeButton("Back", (dialog, which) -> dialog.cancel());
             dialogBuilder.setPositiveButton("Copy Email",
                     (dialog, which) -> {
@@ -322,6 +374,12 @@ public class AboutFragment extends BaseFragment {
         loadData();
     }
 
+    @Override
+    public void onDetach() {
+        super.onDetach();
+        mapFragmentCallback = null;
+    }
+
     private void handleVisibility() {
         if (!sessions.isEmpty()) {
             bookmarksRecyclerView.setVisibility(View.VISIBLE);
@@ -333,18 +391,17 @@ public class AboutFragment extends BaseFragment {
     }
 
     private void loadEventDates() {
-        aboutFragmentViewModel.getDateList().observe(this, dateList -> {
-            this.dateList.clear();
-            this.dateList.addAll(dateList);
-        });
+        this.dateList.clear();
+        this.dateList.addAll(aboutFragmentViewModel.getDateList());
     }
 
     private void loadData() {
         loadEventDates();
-        aboutFragmentViewModel.getSessions(dateList).observe(this, sessionsList -> {
+        aboutFragmentViewModel.getBookmarkedSessions().observe(this, sessionsList -> {
             sessions.clear();
             sessions.addAll(sessionsList);
             bookMarksListAdapter = new GlobalSearchAdapter(sessions, getContext());
+            bookMarksListAdapter.setOnBookmarkSelectedListener(this);
             bookmarksRecyclerView.setAdapter(bookMarksListAdapter);
             handleVisibility();
         });
@@ -362,5 +419,18 @@ public class AboutFragment extends BaseFragment {
         OpenEventApp.getEventBus().unregister(this);
         if (event != null && event.isValid())
             event.removeAllChangeListeners();
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        bookMarksListAdapter.clearOnBookmarkSelectedListener();
+    }
+
+    @Override
+    public void showSnackbar(BookmarkStatus bookmarkStatus) {
+        Snackbar snackbar = Snackbar.make(bookmarkHeader, SnackbarUtil.getMessageResource(bookmarkStatus), Snackbar.LENGTH_LONG);
+        SnackbarUtil.setSnackbarAction(getContext(), snackbar, bookmarkStatus)
+                .show();
     }
 }

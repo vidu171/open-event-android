@@ -42,6 +42,7 @@
     <string name="error_uploading_image">Error uploading image</string>
     <string name="error_changing_password">Error changing password</string>
     <string name="error_password_not_correct">Incorrect password</string>
+    <string name="error_password_empty">Error, Cannot set empty password</string>
     <string name="ok">OK</string>
 
     <string name="logged_in_successfully">Successfully logged in</string>
@@ -58,7 +59,7 @@
     <string name="title_section_tracks">Tracks</string>
     <string name="title_section_speakerlist">Speakers</string>
     <string name="title_section_location">Locations</string>
-    
+
     <string name="item_track">This is a track symbol.</string>
     <string name="session_bookmark_status">This image shows the session bookmark status.</string>
     <string name="session_speaker_icon">This is the speaker icon.</string>
@@ -78,6 +79,7 @@
     <string name="menu_sign_up">Sign Up</string>
     <string name="menu_home">Home</string>
     <string name="menu_feed">Live Feed</string>
+    <string name="menu_twitter">Twitter Feed</string>
     <string name="menu_tracks">Tracks</string>
     <string name="menu_bookmarks">Bookmarks</string>
     <string name="menu_speakers">Speakers</string>
@@ -147,11 +149,13 @@
     <string name="net_unavailable">Network not available</string>
     <string name="turn_on">Turn on WiFi or Mobile data in Settings</string>
     <string name="error">Error</string>
+    <string name="http_error">HTTP Error</string>
+    <string name="api_not_found">API Not Found</string>
 
     <string name="empty_list">No Bookmarks Available</string>
     <string name="bullet">"•"</string>
     <string name="bookmarks">Bookmarks</string>
-    
+
     <string name="no_upcoming_ongoing">"No upcoming/ongoing sessions in this track</string>
 
     <!--Speaker-->
@@ -301,4 +305,27 @@
     <string name="speakers_bio">About me</string>
     <string name="social_media">Social media</string>
     <string name="sessions_title_card">Sessions</string>
+
+    <!--Session-detail-strings-->
+    <string name="session_track_details">Session Track :</string>
+    <string name="title_details">Title :</string>
+    <string name="start_time_details">Start Time :</string>
+    <string name="end_time_details">End Time :</string>
+    <string name="location_details">Location :</string>
+    <string name="speakers_details">Speaker(s) :</string>
+    <string name="description_details">Description :</string>
+
+    <!--Tracks Session Status-->
+    <string name="status_upcoming">UPCOMING</string>
+    <string name="status_ongoing">ONGOING</string>
+
+    <!--Strings with placeholders -->
+    <string name="filters_text">Filters(%d): %s</string>
+    <string name="space_separated_strings">%s %s</string>
+    <string name="about_fragment_announcement">%s at %s</string>
+    <string name="about_fragment_to_date_event">To: %s</string>
+    <string name="about_fragment_from_date_event">From: %s</string>
+
+    <string name="twitter_feed">Twitter Feed</string>
+
 </resources>

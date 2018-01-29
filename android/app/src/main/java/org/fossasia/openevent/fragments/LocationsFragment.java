@@ -64,6 +64,7 @@ public class LocationsFragment extends BaseFragment implements SearchView.OnQuer
     private SearchView searchView;
 
     private LocationsFragmentViewModel locationsFragmentViewModel;
+    private RecyclerView.AdapterDataObserver adapterDataObserver;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -77,20 +78,19 @@ public class LocationsFragment extends BaseFragment implements SearchView.OnQuer
         //set up view model
         locationsFragmentViewModel = ViewModelProviders.of(this).get(LocationsFragmentViewModel.class);
         searchText = locationsFragmentViewModel.getSearchText();
-        locationsFragmentViewModel.getLocations().observe(LocationsFragment.this, microlocations ->  {
-                locations.clear();
-                locations.addAll(microlocations);
-
-                locationsListAdapter.setCopyOfTracks(microlocations);
-                locationsListAdapter.notifyDataSetChanged();
-                if (!Utils.isEmpty(searchText))
-                    locationsListAdapter.filter(searchText);
-                handleVisibility();
-            });
-
+        loadLocations();
         handleVisibility();
-
         return view;
+    }
+
+    private void loadLocations() {
+        locationsFragmentViewModel.getLocations(searchText).observe(LocationsFragment.this, microlocations ->  {
+            locations.clear();
+            locations.addAll(microlocations);
+            locationsListAdapter.setCopyOfTracks(microlocations);
+            locationsListAdapter.notifyDataSetChanged();
+            handleVisibility();
+        });
     }
 
     private void setUpRecyclerView() {
@@ -103,12 +103,13 @@ public class LocationsFragment extends BaseFragment implements SearchView.OnQuer
 
         final StickyRecyclerHeadersDecoration headersDecoration = new StickyRecyclerHeadersDecoration(locationsListAdapter);
         locationsRecyclerView.addItemDecoration(headersDecoration);
-        locationsListAdapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+        adapterDataObserver = new RecyclerView.AdapterDataObserver() {
             @Override
             public void onChanged() {
                 headersDecoration.invalidateHeaders();
             }
-        });
+        };
+        locationsListAdapter.registerAdapterDataObserver(adapterDataObserver);
     }
 
     private void handleVisibility() {
@@ -164,9 +165,10 @@ public class LocationsFragment extends BaseFragment implements SearchView.OnQuer
 
     @Override
     public boolean onQueryTextChange(String query) {
-        locationsListAdapter.filter(query);
-
         searchText = query;
+        loadLocations();
+        locationsListAdapter.animateTo(locations);
+
         Utils.displayNoResults(noResultsView, locationsRecyclerView, noMicrolocationsView, locationsListAdapter.getItemCount());
 
         return true;
@@ -182,6 +184,7 @@ public class LocationsFragment extends BaseFragment implements SearchView.OnQuer
     public void onDestroyView() {
         super.onDestroyView();
         Utils.unregisterIfUrlValid(this);
+        locationsListAdapter.unregisterAdapterDataObserver(adapterDataObserver);
 
         // Remove listeners to fix memory leak
         if (swipeRefreshLayout != null) swipeRefreshLayout.setOnRefreshListener(null);

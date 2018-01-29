@@ -79,6 +79,8 @@ import org.fossasia.openevent.fragments.ScheduleFragment;
 import org.fossasia.openevent.fragments.SpeakersListFragment;
 import org.fossasia.openevent.fragments.SponsorsFragment;
 import org.fossasia.openevent.fragments.TracksFragment;
+import org.fossasia.openevent.fragments.TwitterFeedFragment;
+import org.fossasia.openevent.modules.OnImageZoomListener;
 import org.fossasia.openevent.utils.AuthUtil;
 import org.fossasia.openevent.utils.CommonTaskLoop;
 import org.fossasia.openevent.utils.ConstantStrings;
@@ -88,6 +90,7 @@ import org.fossasia.openevent.utils.NetworkUtils;
 import org.fossasia.openevent.utils.SharedPreferencesUtil;
 import org.fossasia.openevent.utils.SmoothActionBarDrawerToggle;
 import org.fossasia.openevent.utils.Utils;
+import org.fossasia.openevent.utils.ZoomableImageUtil;
 import org.fossasia.openevent.widget.DialogFactory;
 
 import java.io.IOException;
@@ -108,7 +111,7 @@ import io.realm.RealmList;
 import io.realm.RealmResults;
 import timber.log.Timber;
 
-public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCallback {
+public class MainActivity extends BaseActivity implements FeedAdapter.OpenCommentsDialogListener, OnImageZoomListener, AboutFragment.OnMapSelectedListener {
 
     private static final String STATE_FRAGMENT = "stateFragment";
     private static final String NAV_ITEM = "navItem";
@@ -123,6 +126,7 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
     private boolean isAuthEnabled = SharedPreferencesUtil.getBoolean(ConstantStrings.IS_AUTH_ENABLED, false);
     private boolean customTabsSupported;
     private int currentMenuItemId;
+    private boolean isMapFragment;
 
     @BindView(R.id.toolbar) Toolbar toolbar;
     @BindView(R.id.nav_view) NavigationView navigationView;
@@ -140,6 +144,7 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
     private final CompositeDisposable disposable = new CompositeDisposable();
     private RealmDataRepository realmRepo = RealmDataRepository.getDefaultInstance();
     private Event event; // Future Event, stored to remove listeners
+    private AboutFragment.OnMapSelectedListener onMapSelectedListener = value -> isMapFragment = value;
 
     public static Intent createLaunchFragmentIntent(Context context) {
         return new Intent(context, MainActivity.class)
@@ -175,7 +180,6 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
         SharedPreferencesUtil.putInt(ConstantStrings.SESSION_MAP_ID, -1);
         isTwoPane = drawerLayout == null;
         Utils.setTwoPane(isTwoPane);
-
 
         setUpToolbar();
         setUpNavDrawer();
@@ -289,7 +293,7 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
 
     private void setUpNavDrawer() {
         setUpUserProfileMenu();
-        headerView = (ImageView) navigationView.getHeaderView(0).findViewById(R.id.headerDrawer);
+        headerView = navigationView.getHeaderView(0).findViewById(R.id.headerDrawer);
         if (toolbar != null && !isTwoPane) {
             final ActionBar ab = getSupportActionBar();
             if(ab == null) return;
@@ -363,7 +367,7 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
         OpenEventApp.postEventOnUIThread(new EventLoadedEvent(event));
         saveEventDates(event);
 
-        downloadPageId();
+        storeFeedDetails();
     }
 
     private void startDownloadFromNetwork() {
@@ -387,24 +391,10 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
         }
     }
 
-    private void downloadPageId() {
-        //Store the facebook page name in the shared preference from the database
-        if(SharedPreferencesUtil.getString(ConstantStrings.FACEBOOK_PAGE_NAME, null) == null) {
-            RealmList<SocialLink> socialLinks = event.getSocialLinks();
-            RealmResults<SocialLink> facebookPage = socialLinks.where().equalTo("name", "Facebook").findAll();
-            if (facebookPage.size() == 0)
-                return;
-
-            SocialLink facebookLink = facebookPage.get(0);
-            String link = facebookLink.getLink();
-            String tempString = ".com";
-            String pageName = link.substring(link.indexOf(tempString) + tempString.length()).replace("/", "");
-
-            if (Utils.isEmpty(pageName))
-                return;
-
-            SharedPreferencesUtil.putString(ConstantStrings.FACEBOOK_PAGE_NAME, pageName);
-        }
+    private void storeFeedDetails() {
+        //Store the facebook and twitter page name in the shared preference from the database
+        storePageName(ConstantStrings.SOCIAL_LINK_FACEBOOK, ConstantStrings.FACEBOOK_PAGE_NAME);
+        storePageName(ConstantStrings.SOCIAL_LINK_TWITTER, ConstantStrings.TWITTER_PAGE_NAME);
 
         if(SharedPreferencesUtil.getString(ConstantStrings.FACEBOOK_PAGE_ID, null) == null &&
                 SharedPreferencesUtil.getString(ConstantStrings.FACEBOOK_PAGE_NAME, null) != null) {
@@ -417,6 +407,20 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
                                 SharedPreferencesUtil.putString(ConstantStrings.FACEBOOK_PAGE_ID, id);
                             },
                             throwable -> Timber.d("Facebook page id download failed: " + throwable.toString()));
+        }
+    }
+
+    private void storePageName(String feedType, String key) {
+        if (SharedPreferencesUtil.getString(key, null) == null) {
+            RealmList<SocialLink> socialLinks = event.getSocialLinks();
+            RealmResults<SocialLink> page = socialLinks.where().equalTo("name", feedType).findAll();
+            if (!page.isEmpty()) {
+                SocialLink socialLink = page.get(0);
+                String socialLinkUrl = socialLink.getLink();
+                String tempString = ".com/";
+                String pageName = socialLinkUrl.substring(socialLinkUrl.indexOf(tempString) + tempString.length()).replace("/", "");
+                SharedPreferencesUtil.putString(key, pageName);
+            }
         }
     }
 
@@ -518,13 +522,16 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
 
         switch (menuItemId) {
             case R.id.nav_home:
-                replaceFragment(new AboutFragment(), R.string.menu_home);
+                replaceFragment(AboutFragment.newInstance(onMapSelectedListener), R.string.menu_home);
                 break;
             case R.id.nav_tracks:
                 replaceFragment(new TracksFragment(), R.string.menu_tracks);
                 break;
             case R.id.nav_feed:
-                replaceFragment(new FeedFragment(), R.string.menu_feed);
+                replaceFragment(FeedFragment.getInstance(this, this), R.string.menu_feed);
+                break;
+            case R.id.nav_twitter_feed:
+                replaceFragment(TwitterFeedFragment.getInstance(this), R.string.menu_twitter);
                 break;
             case R.id.nav_schedule:
                 replaceFragment(new ScheduleFragment(), R.string.menu_schedule);
@@ -566,19 +573,24 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
 
     @Override
     public void onBackPressed() {
+        Fragment fragment = getSupportFragmentManager().findFragmentById(R.id.content_frame);
+
         if (!isTwoPane && drawerLayout.isDrawerOpen(GravityCompat.START)) {
             drawerLayout.closeDrawer(GravityCompat.START);
         } else if (atHome) {
             if (backPressedOnce) {
                 super.onBackPressed();
-            } else {
+            } else if (fragment instanceof AboutFragment) {
                 backPressedOnce = true;
                 Snackbar snackbar = Snackbar.make(mainFrame, R.string.press_back_again, 2000);
                 snackbar.show();
                 new Handler().postDelayed(() -> backPressedOnce = false, 2000);
+            } else if (isMapFragment) {
+                replaceFragment(AboutFragment.newInstance(onMapSelectedListener), R.string.menu_home);
+                addShadowToAppBar(true);
             }
         } else {
-            replaceFragment(new AboutFragment(), R.string.menu_home);
+            replaceFragment(AboutFragment.newInstance(onMapSelectedListener), R.string.menu_home);
             navigationView.setCheckedItem(R.id.nav_home);
             addShadowToAppBar(true);
         }
@@ -692,7 +704,8 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
     public void handleResponseEvent(RetrofitResponseEvent responseEvent) {
         Integer statusCode = responseEvent.getStatusCode();
         if (statusCode.equals(404)) {
-            showErrorDialog("HTTP Error", statusCode + "Api Not Found");
+            showErrorDialog(getResources().getString(R.string.http_error), statusCode + "\n" + getResources().getString(R.string.api_not_found));
+            downloadFromAssets();
         }
     }
 
@@ -851,8 +864,7 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
     protected void onDestroy() {
         super.onDestroy();
         unbindService(customTabsServiceConnection);
-        if(disposable != null && !disposable.isDisposed())
-            disposable.dispose();
+        disposable.dispose();
         if(event != null)
             event.removeAllChangeListeners();
         if(completeHandler != null)
@@ -866,11 +878,20 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
     }
 
     @Override
-    public void onMethodCallback(List<CommentItem> commentItems) {
+    public void openCommentsDialog(List<CommentItem> commentItems) {
         CommentsDialogFragment newFragment = new CommentsDialogFragment();
         Bundle bundle = new Bundle();
         bundle.putParcelableArrayList(ConstantStrings.FACEBOOK_COMMENTS, new ArrayList<>(commentItems));
         newFragment.setArguments(bundle);
         newFragment.show(fragmentManager, "Comments");
+    }
+
+    @Override
+    public void onMapSelected(boolean value) {
+        //it is used to check if the maps fragment is selected
+    }
+
+    public void onZoom(String imageUri) {
+        ZoomableImageUtil.showZoomableImageDialogFragment(fragmentManager, imageUri);
     }
 }
