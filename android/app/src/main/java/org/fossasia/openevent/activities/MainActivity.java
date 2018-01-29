@@ -865,12 +865,8 @@ public class MainActivity extends BaseActivity implements FeedAdapter.OpenCommen
     protected void onDestroy() {
         super.onDestroy();
         unbindService(customTabsServiceConnection);
-<<<<<<< HEAD
         if( !disposable.isDisposed())
             disposable.dispose();
-=======
-        disposable.dispose();
->>>>>>> 214412edbd8e581f4825530cd381513337123964
         if(event != null)
             event.removeAllChangeListeners();
         if(completeHandler != null)
