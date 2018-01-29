@@ -253,8 +253,7 @@ public class ScheduleFragment extends BaseFragment implements OnBookmarkSelected
     public void onDestroyView() {
         super.onDestroyView();
         OpenEventApp.getEventBus().unregister(this);
-        if(!compositeDisposable.isDisposed())
-            compositeDisposable.dispose();
+        compositeDisposable.dispose();
 
         if(viewPager != null && onPageChangeListener != null)
             viewPager.removeOnPageChangeListener(onPageChangeListener);
