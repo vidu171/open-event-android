@@ -851,7 +851,7 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
     protected void onDestroy() {
         super.onDestroy();
         unbindService(customTabsServiceConnection);
-        if(disposable != null && !disposable.isDisposed())
+        if( !disposable.isDisposed())
             disposable.dispose();
         if(event != null)
             event.removeAllChangeListeners();
