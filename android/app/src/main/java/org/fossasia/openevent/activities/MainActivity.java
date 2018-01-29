@@ -137,7 +137,7 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
     private CustomTabsServiceConnection customTabsServiceConnection;
     private CustomTabsClient customTabsClient;
     private DownloadCompleteHandler completeHandler;
-    private CompositeDisposable disposable;
+    private final CompositeDisposable disposable = new CompositeDisposable();
     private RealmDataRepository realmRepo = RealmDataRepository.getDefaultInstance();
     private Event event; // Future Event, stored to remove listeners
 
@@ -176,7 +176,6 @@ public class MainActivity extends BaseActivity implements FeedAdapter.AdapterCal
         isTwoPane = drawerLayout == null;
         Utils.setTwoPane(isTwoPane);
 
-        disposable = new CompositeDisposable();
 
         setUpToolbar();
         setUpNavDrawer();

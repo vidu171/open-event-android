@@ -49,7 +49,7 @@ public class ScheduleFragment extends BaseFragment {
     @BindView(R.id.close_filter) ImageView closeFilterBarButton;
     @BindView(R.id.filter_bar) LinearLayout filterBar;
 
-    private CompositeDisposable compositeDisposable;
+    private final CompositeDisposable compositeDisposable = new CompositeDisposable();
     private int sortType;
     private int sortOrder;
     private ScheduleViewPagerAdapter adapter;
@@ -70,7 +70,6 @@ public class ScheduleFragment extends BaseFragment {
 
         filterBar.setVisibility(View.GONE);
         OpenEventApp.getEventBus().register(true);
-        compositeDisposable = new CompositeDisposable();
         sortType = SharedPreferencesUtil.getInt(ConstantStrings.PREF_SORT_SCHEDULE, 2);
         sortOrder = SharedPreferencesUtil.getInt(ConstantStrings.PREF_SORT_ORDER, 0);
         selectedTracks = new ArrayList<>();
